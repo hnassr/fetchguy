@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/5.0.0-alpha1/css/bootstrap.min.css" integrity="sha384-r4NyP46KrjDleawBgD5tp8Y7UzmLA05oM1iAEQ17CSuDqnUK2+k9luXQOfXJCJ4I" crossorigin="anonymous">
+    <title>FetchGuy</title>
+    <style>
+        code.response {
+            min-height: 300px;
+        }
+        [v-cloak] { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container" id="app">
+        <header class="blog-header py-3">
+            <div class="row flex-nowrap justify-content-between align-items-center">
+                <div class="col-4 pt-1">
+                    <h3>FetchGuy</h3>
+                </div>
+            </div>
+        </header>
+        <div class="row pt-4 pb-4" :class="{'bg-danger': errors != null, 'bg-light': errors == null}">
+            <div class="col-md-2">
+                <select v-model="type" class="form-control">
+                    <option value="get">GET</option>
+                    <option value="post">POST</option>
+                    <option value="put">PUT</option>
+                    <option value="delete">DELETE</option>
+                    <option value="patch">PATCH</option>
+                </select>
+            </div>
+            <div class="col-md-8">
+                <input v-model="url" type="text" class="form-control" placeholder="URL">
+            </div>
+            <div class="col-md-2">
+                <button @click="fetch" class="btn btn-success" :disabled="loading">Fetch</button>
+
+                <span class="float-right font-weight-bolder" v-cloak>{{ responseStatusCode }}</span>
+            </div>
+        </div>
+
+        <hr>
+        <div class="row">
+            <div class="col-md-1"></div>
+            <div class="col-md-3"><strong>Key</strong></div>
+            <div class="col-md-3"><strong>Value</strong></div>
+            <div class="col-md-1"></div>
+        </div>
+
+        <div v-for="(header, index) in headers" class="row mb-1">
+            <div class="col-md-1">
+                <input type="checkbox" v-model="header.checked">
+            </div>
+            <div class="col-md-3">
+                <input type="text" v-model="header.key" class="form-control">
+            </div>
+            <div class="col-md-3">
+                <input type="text" v-model="header.value" class="form-control">
+            </div>
+            <div class="col-md-1">
+                <span @click="headers.splice(index, 1)" class="text-danger" style="cursor: pointer;">[X]</span>
+            </div>
+            <div class="col-md-2">
+                <button v-if="index === headers.length - 1" @click="addHeader" class="btn btn-info">Add</button>
+            </div>
+        </div>
+        <hr>
+
+        <div class="row mt-5">
+            <div class="col-md-4">
+                <textarea v-model="body" rows="10" placeholder="Body" class="form-control" :disabled="type === 'get' || type === 'delete'"></textarea>
+            </div>
+            <div class="col-md-8 border">
+                <code class="response p-2">
+                    <pre v-cloak>{{ response }}</pre>
+                </code>
+            </div>
+        </div>
+
+        <hr>
+
+        <div v-if="errors != null" class="row mt-4 border bg-light pt-2 pb-2">
+            <div class="col-md-12">
+                <code class="response p-2">
+                    <pre v-cloak>{{ errors }}</pre>
+                </code>
+            </div>
+        </div>
+    </div>
+    <script src="https://unpkg.com/vue@next"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.13.0/beautify.min.js"></script>
+    <script>
+        Vue.createApp({
+            data() {
+                return {
+                    loading: false,
+                    type: 'get',
+                    url: 'http://ip-api.com/json',
+                    headers: [],
+                    response: null,
+                    body: null,
+                    responseStatusCode: null,
+
+                    errors: null,
+                }
+            },
+
+            mounted() {
+                window.onerror = (error, url, line) => {
+                    this.errors = js_beautify(JSON.stringify(error));
+                }
+                this.headers.push({checked: true, key: 'Accept', value: 'application/json'});
+            },
+
+            methods: {
+                fetch() {
+                    this.response = null;
+                    this.errors = null;
+                    this.responseStatusCode = null;
+                    try {
+                        const headers = {};
+                        for(const header of this.headers) {
+                            if(header.checked && header.key != null && header.value != null) {
+                                headers[header.key] = header.value
+                            }
+                        }
+                        this.loading = true;
+                        axios({
+                            method: this.type,
+                            url: this.url,
+                            data: ['post', 'put','patch'].includes(this.type) ? JSON.parse(this.body): {},
+                            headers: headers
+                        }).then(response => {
+                            this.loading = false;
+                            this.responseStatusCode = response.status;
+                            this.response = js_beautify(JSON.stringify(response.data));
+                        }).catch(error => {
+                            this.loading = false;
+                            if(typeof error.response === 'undefined') {
+                                window.onerror = (error, url, line) => {
+                                    this.errors = js_beautify(JSON.stringify(error));
+                                }
+                                // this.errors = 'Uncaught problem, please open browser console.'
+                            }
+                            else {
+                                this.responseStatusCode = error.response.status;
+                                this.errors = js_beautify(JSON.stringify(error.response.data));
+                            }
+                        })
+                    } catch (e) {
+                        this.loading = false;
+                        this.errors = e;
+                    }
+                },
+
+                addHeader() {
+                    this.headers.push({checked: true, key: null, value: null})
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
